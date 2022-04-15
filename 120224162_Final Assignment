@@ -1,0 +1,278 @@
+from pandas.io.formats.info import DataFrameInfo
+import pandas as pd
+import numpy as np
+
+new_df = pd.read_csv("https://github.com/andvise/DataAnalyticsDatasets/blob/6d5738101d173b97c565f143f945dedb9c42a400/dm_assignment2/sat_dataset_train.csv?raw=true")
+
+value = new_df.quantile(0.98)
+
+new_df=new_df.round(decimals = 2)
+#new_df = df.replace(np.inf, value)
+#new_df = df.replace(-np.inf, value)
+new_df.replace([np.inf, -np.inf], np.nan,inplace=True)
+
+new_df.fillna(0,inplace=True)
+#new_df = df.drop(['saps_EstACL_Mean'], axis=1)
+
+new_df
+
+new_df.dtypes
+new_df
+
+new_df['target'].value_counts()
+
+df_1= new_df
+y= df_1['target']
+x = df_1.iloc[: , :-1]
+
+
+from sklearn.model_selection import train_test_split
+
+x_train,x_test,y_train,y_test = train_test_split(x,y,train_size=0.70,test_size=0.30,random_state=1)
+
+print(y_test)
+
+# YOUR CODE HERE
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
+
+standard_scaler = StandardScaler()
+standard_scaler.fit(x_train)
+x_train_val=standard_scaler.transform(x_train)
+x_test_val=standard_scaler.transform(x_test)
+
+
+knn = KNeighborsClassifier(n_neighbors = 1,  metric='manhattan')
+knn.fit(x_train,y_train)
+
+y_pred=knn.predict(x_test)
+
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix_main = confusion_matrix(y_test,y_pred).ravel().tolist()
+print(confusion_matrix_main)
+accuracy= (confusion_matrix_main[0]+confusion_matrix_main[3]) / (confusion_matrix_main[0]+confusion_matrix_main[1]+confusion_matrix_main[2]+confusion_matrix_main[3])
+print(accuracy)
+
+from sklearn import tree
+from sklearn.model_selection import cross_val_score
+
+decisiontree = tree.DecisionTreeClassifier(criterion='entropy')
+decisiontree.fit(x_train,y_train)
+
+y_predict_decision_tree = decisiontree.predict(x_test)
+
+confusion_matrix_main2 = confusion_matrix(y_test,y_predict_decision_tree).ravel().tolist()
+print(confusion_matrix_main2)
+accuracy2= (confusion_matrix_main2[0]+confusion_matrix_main2[3]) / (confusion_matrix_main2[0]+confusion_matrix_main2[1]+confusion_matrix_main2[2]+confusion_matrix_main2[3])
+print(accuracy2)
+
+from sklearn.metrics import roc_auc_score
+
+print("Roc Score",roc_auc_score(y_pred,y_test))
+
+accuracyknn = []
+
+# Calculating error for K values between 1 and 40
+for i in range(1, 15):
+    knn = KNeighborsClassifier(n_neighbors=i)
+    knn.fit(x_train, y_train)
+    pred_i = knn.predict(x_test)
+    accuracyknn.append(np.mean(pred_i == y_test))
+
+print(accuracyknn)
+
+#lets plot some summary for accuracy of K values between 1 to 15 and check the optimal values.
+
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(14,7))
+plt.plot(range(1,15),accuracyknn,color='blue',linestyle='dotted',marker='o',markerfacecolor='pink',markersize='12')
+
+plt.title("Accuracy K values")
+plt.xlabel("K value")
+plt.ylabel("Accuracy")
+
+from sklearn import neighbors
+# YOUR CODE HERE
+#Hold Out and Cross Validation
+#Here K fold cross validation is used
+from sklearn.model_selection import cross_val_score
+knn2=KNeighborsClassifier()
+print(knn2)
+knn_score = cross_val_score(knn2,x,y,cv=10)
+decision_tree_cross_validation_score = cross_val_score(decisiontree,x,y,cv=10)
+print(knn_score)
+print(decision_tree_cross_validation_score)
+print("Mean Cross Validation Score For KNN with k folds: ",knn_score.mean())
+print("Mean Cross Validation Score For Decision Tree with k folds: ",decision_tree_cross_validation_score.mean())
+
+#For Hyperparameter tuning we are considering grid search cv
+from sklearn.model_selection import GridSearchCV
+#hyperparameters require for knn'
+#The hyperparameter for knn is choosen as number of k values and distance metric in sklearn the distance metric is termed as p and if p=1 the distance is manhattan, if p=2, the distance metric is euclidian
+
+n_neighbors = list(range(1,20))
+distance_metric=[1,2]
+
+hypermarameter = dict(n_neighbors = n_neighbors,p=distance_metric)
+
+knn_check= KNeighborsClassifier()
+#reference: https://medium.datadriveninvestor.com/k-nearest-neighbors-in-python-hyperparameters-tuning-716734bc557f
+
+gridcv= GridSearchCV(knn,hypermarameter,cv=10)
+best_model = gridcv.fit(x_train,y_train)
+print("Best value of K:",best_model.best_estimator_.get_params()['n_neighbors'])
+
+print("Best Distance Metric:",best_model.best_estimator_.get_params()['p'])
+
+#hyperparameter tuning for decision tree using gridcv
+#here we will using two hyperparameters. One is criterion metric that has two values gini index and another one is information Gain
+# and another hyperparameter will be the max depth.
+
+criterion = ['gini','entropy']
+max_depth=list(range(1,15))
+
+hyperparameter_decision_tree = dict(criterion=criterion,max_depth=max_depth)
+
+gridcvdecisiontree = GridSearchCV(decisiontree,hyperparameter_decision_tree,cv=10)
+best_tree = gridcvdecisiontree.fit(x_train,y_train)
+
+print("Best split criterion:",best_tree.best_estimator_.get_params()['criterion'])
+
+print("Optimum Maximum Depth of Tree:",best_tree.best_estimator_.get_params()['max_depth'])
+
+# Feature Reduction
+# For feature reduction we are considering here two techniques: PCA,LDA
+# knn
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.neighbors import NeighborhoodComponentsAnalysis
+from sklearn.pipeline import make_pipeline
+
+pca_knn = make_pipeline(StandardScaler(),PCA(n_components=2,random_state=0))
+pca_knn.fit(x_train)
+x_train_pca_scaled = pca_knn.transform(x_train)
+x_test_pca_scaled = pca_knn.transform(x_test)
+knn.fit(x_train_pca_scaled,y_train)
+
+prediction_pca= knn.predict(x_test_pca_scaled)
+
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix_main_pca = confusion_matrix(y_test,prediction_pca).ravel().tolist()
+print(confusion_matrix_main_pca)
+accuracy_pca= (confusion_matrix_main_pca[0]+confusion_matrix_main_pca[3]) / (confusion_matrix_main_pca[0]+confusion_matrix_main_pca[1]+confusion_matrix_main_pca[2]+confusion_matrix_main_pca[3])
+print("Accuracy for KNN after dimensionality reduction to 2 by PCA: ",accuracy_pca)
+
+# decision tree
+decisiontree.fit(x_train_pca_scaled,y_train)
+predict_dt_pca= decisiontree.predict(x_test_pca_scaled)
+
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix_main_dt_pca = confusion_matrix(y_test,predict_dt_pca).ravel().tolist()
+print(confusion_matrix_main_dt_pca)
+accuracy_pca_dt= (confusion_matrix_main_dt_pca[0]+confusion_matrix_main_dt_pca[3]) / (confusion_matrix_main_dt_pca[0]+confusion_matrix_main_dt_pca[1]+confusion_matrix_main_dt_pca[2]+confusion_matrix_main_dt_pca[3])
+print("Accuracy for Decision Tree after dimensionality reduction to 2 by PCA: ",accuracy_pca_dt)
+
+
+# Feature Normalization
+#for feature normalization we can use standard scaler as well as min max scalar
+#here we are using min max scalar
+from sklearn.preprocessing import MinMaxScaler
+
+min_max_scaler = MinMaxScaler()
+min_max_scaler.fit(x_train)
+x_train_val_min_max=min_max_scaler.transform(x_train)
+x_test_val_min_max=min_max_scaler.transform(x_test)
+
+# knn
+knn.fit(x_train_val_min_max,y_train)
+prediction_scaled = knn.predict(x_test_val_min_max)
+
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix_main_minmax = confusion_matrix(y_test,prediction_scaled).ravel().tolist()
+print(confusion_matrix_main_minmax)
+accuracy_minmax= (confusion_matrix_main_minmax[0]+confusion_matrix_main_minmax[3]) / (confusion_matrix_main_minmax[0]+confusion_matrix_main_minmax[1]+confusion_matrix_main_minmax[2]+confusion_matrix_main_minmax[3])
+print("Accuracy for KNN after Min max Scaling: ",accuracy_minmax)
+
+
+
+# decision tree
+decisiontree.fit(x_train_val_min_max,y_train)
+prediction_scaled_dt = decisiontree.predict(x_test_val_min_max)
+from sklearn.metrics import confusion_matrix
+#confusion Matrix to check accuracy for decision tree fitted for data which scaled by using min max scaling
+confusion_matrix_main_minmax_dt = confusion_matrix(y_test,prediction_scaled_dt).ravel().tolist()
+print(confusion_matrix_main_minmax_dt)
+accuracy_minmax_dt= (confusion_matrix_main_minmax_dt[0]+confusion_matrix_main_minmax_dt[3]) / (confusion_matrix_main_minmax_dt[0]+confusion_matrix_main_minmax_dt[1]+confusion_matrix_main_minmax_dt[2]+confusion_matrix_main_minmax_dt[3])
+print("Accuracy for Decision Tree after Min max Scaling: ",accuracy_minmax_dt)
+
+
+# YOUR CODE HERE
+
+#Base Code reference for my classifier Random Forest : https://www.datacamp.com/community/tutorials/naive-bayes-scikit-learn
+#classifier Used Here is Gaussian Random Forest
+from pandas.io.formats.info import DataFrameInfo
+import pandas as pd
+import numpy as np
+
+df = pd.read_csv("https://github.com/andvise/DataAnalyticsDatasets/blob/main/dm_assignment2/sat_dataset_test.csv?raw=true")
+
+value = df.quantile(0.98)
+
+df=df.round(decimals = 2)
+#df = df.replace(np.inf, value)
+#df = df.replace(-np.inf, value)
+df.replace([np.inf, -np.inf], np.nan,inplace=True)
+
+df.fillna(0,inplace=True)
+#df = df.drop(['saps_EstACL_Mean'], axis=1)
+
+df
+
+df.dtypes
+df
+
+df['target'].value_counts()
+
+# YOUR CODE HERE
+df1= df
+y= df['target']
+x = df1.iloc[: , :-1]
+
+
+from sklearn.model_selection import train_test_split
+
+x_train,x_test,y_train,y_test = train_test_split(x,y,train_size=0.70,test_size=0.30,random_state=1)
+
+print(y_test)
+
+from sklearn.ensemble import RandomForestClassifier
+
+random_forest = RandomForestClassifier(max_depth=2,random_state=0)
+
+random_forest.fit(x_train,y_train)
+
+prediction_rf = random_forest.predict(x_test)
+
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix_rf = confusion_matrix(y_test, prediction_rf).ravel().tolist()
+print(confusion_matrix_rf)
+accuracy_rf= (confusion_matrix_rf[0]+confusion_matrix_rf[3]) / (confusion_matrix_rf[0]+confusion_matrix_rf[1]+confusion_matrix_rf[2]+confusion_matrix_rf[3])
+print("Accuracy for Random Forest : ",accuracy_rf)
+
+
+from joblib import dump, load
+from io import BytesIO
+import requests
+
+# INSERT YOUR MODEL'S URL
+mLink = 'https://github.com/DeftPenk/CS6405-DataMining?raw=true'
+mfile = BytesIO(requests.get(mLink).content)
+model = load(mfile)
+# YOUR CODE HERE
